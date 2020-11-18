@@ -1,0 +1,13 @@
+.*
+*~
+
+__pycache__
+*.egg-info
+*.pyc
+docker-compose.override.yml
+
+!.dockerignore
+!.flake8
+!.gitignore
+!.gitlab-ci.yml
+!.isort.cfg

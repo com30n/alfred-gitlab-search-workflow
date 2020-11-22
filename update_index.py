@@ -6,7 +6,6 @@ import os
 import sys
 import json
 import sqlite3
-from collections import OrderedDict
 
 from time import time
 from urlparse import urljoin
@@ -15,27 +14,32 @@ from utils import get_wf_variable
 from workflow import Workflow3, PasswordNotFound, web, util
 from workflow.notify import notify
 
-from accounts import ManageGitlabAccounts
+from accounts import get_accounts, Accounts, Account
 
 from config import INDEX_DB, DATA_FILE
 
 log = None
 
 
-def get_all_pages(wf, api_token, base_url):
+def get_all_pages(wf, account):
     result = []
     notification_title = "Loading all projects..."
     notification_text_template = "From {base_url} loading page: {page}"
-    gitlab_api_base = urljoin(base_url, 'api/v4/')
+    gitlab_api_base = urljoin(account.url, 'api/v4/')
     gitlab_api_per_page = 'per_page=100'
+    membership = "&membership={}".format(account.project_membership) if account.project_membership else ""
+    visibility = "&visibility={}".format(account.project_visibility) if account.project_visibility else ""
 
-    gitlab_api_projects_url = '{gitlab_api}?private_token={gitlab_token}&{per_page}'.format(
+    gitlab_api_projects_url = '{gitlab_api}?private_token={gitlab_token}&simple={simple}&{per_page}{membership}{visibility}'.format(
         gitlab_api=urljoin(gitlab_api_base, 'projects'),
-        gitlab_token=api_token,
-        per_page=gitlab_api_per_page
+        gitlab_token=account.token,
+        per_page=gitlab_api_per_page,
+        simple=True,
+        membership=membership,
+        visibility=visibility,
     )
-
-    notify(notification_title, notification_text_template.format(base_url=base_url, page=1))
+    log.debug("api url: {}".format(gitlab_api_projects_url))
+    notify(notification_title, notification_text_template.format(base_url=account.url, page=1))
     response = web.get('{api_url}&page={page}'.format(api_url=gitlab_api_projects_url, page=0))
     response.raise_for_status()
     result.extend(response.json())
@@ -43,7 +47,7 @@ def get_all_pages(wf, api_token, base_url):
     while response.headers['X-Next-Page'] != '':
         notify(
             notification_title,
-            notification_text_template.format(base_url=base_url, page=response.headers['X-Next-Page'])
+            notification_text_template.format(base_url=account.url, page=response.headers['X-Next-Page'])
         )
         response = web.get(
             '{api_url}&page={page}'.format(api_url=gitlab_api_projects_url, page=response.headers['X-Next-Page']))
@@ -57,8 +61,9 @@ def load_all_projects(wf):
     log.debug('start updating the cache')
     wf = Workflow3()
 
+    all_accounts = None
     try:
-        all_accounts = ManageGitlabAccounts._load_all_accounts()
+        all_accounts = Accounts(get_accounts(wf))
     except PasswordNotFound:  # API key has not yet been set
         notify(
             "WARNING",
@@ -71,12 +76,16 @@ def load_all_projects(wf):
 
     if not all_accounts:
         # just paste gitlab url to the variables page and token to the keychain and start using the workflow
-        url = get_wf_variable("gitlab_url")
-        token = get_wf_variable("gitlab_token")
-        all_accounts = OrderedDict()
-        all_accounts[0] = (url, token, "")
-
-    acc_to_update = all_accounts.copy()
+        url = get_wf_variable(wf, "gitlab_url")
+        token = get_wf_variable(wf, "gitlab_token")
+        all_accounts = Account(
+            {"simple_account": {
+                "url": url,
+                "token": token,
+                "project_membership": "true",
+                "project_visibility": "internal",
+            }}
+        )
 
     log.info('Removing cache: {}'.format(DATA_FILE))
     # if os.path.exists(DATA_FILE):
@@ -87,9 +96,12 @@ def load_all_projects(wf):
         pass
 
     result = []
-    for url, token, token_name in acc_to_update.values():
-        log.info('base api url is: {url}; api token is: {token_name}'.format(url=url, token_name=token_name))
-        result.extend(get_all_pages(wf, api_token=token, base_url=url))
+    for acc_name, acc_settings in all_accounts.dict.items():
+        log.info('base api url is: {url}; api token is: {token_name}'.format(
+            url=acc_settings.url,
+            token_name=acc_settings.token)
+        )
+        result.extend(get_all_pages(wf, account=acc_settings))
 
     with open(DATA_FILE, 'w+') as fp:
         json.dump(result, fp)
@@ -98,7 +110,6 @@ def load_all_projects(wf):
         "Cache was updated",
         "Was loaded {projects} projects from all gitlab instances".format(projects=len(result))
     )
-
 
 
 def create_index_db():
@@ -118,7 +129,7 @@ def create_index_db():
         #     "CREATE TABLE books(id INT, author TEXT, title TEXT, url TEXT)")
         cur.execute(
             str(
-                "CREATE VIRTUAL TABLE gitlab USING fts5(id, name, name_with_namespace, web_url, ssh_url_to_repo, http_url_to_repo)"
+                "CREATE VIRTUAL TABLE gitlab USING fts3(id, name, name_with_namespace, web_url, ssh_url_to_repo, http_url_to_repo)"
             )
         )
 

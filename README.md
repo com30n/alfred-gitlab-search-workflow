@@ -1,11 +1,19 @@
 **How to install**
+
 Just download `Gitlab.alfredworkflow` and open it.
 
 **What problems it solves**`
+
 This flow solves the problem with fast search in multiple repositories,
 with their cloning, and rapid opening related links (like, commits, branches, pipelines, etc)
 
+**Installation**
+
+Just download *Gitlab.alfredworkflow* form latest release:
+https://github.com/com30n/alfred-gitlab-search-workflow/releases
+
 **Getting started with flow**
+
 _Fist:_ setup environment variable `GIT_DIR`, which should specify path to your directory
 which contains git projects.
 _Second:_ you should generate api token in your gitlab, and then add new account to workflow

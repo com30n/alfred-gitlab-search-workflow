@@ -1,16 +1,12 @@
-**How to install**
+**Installation**
 
-Just download `Gitlab.alfredworkflow` and open it.
+Just download `Gitlab.alfredworkflow` form the latest release:
+https://github.com/com30n/alfred-gitlab-search-workflow/releases
 
 **What problems it solves**`
 
 This flow solves the problem with fast search in multiple repositories,
 with their cloning, and rapid opening related links (like, commits, branches, pipelines, etc)
-
-**Installation**
-
-Just download *Gitlab.alfredworkflow* form latest release:
-https://github.com/com30n/alfred-gitlab-search-workflow/releases
 
 **Getting started with flow**
 
